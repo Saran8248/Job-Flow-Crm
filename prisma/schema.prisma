@@ -1,0 +1,200 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Staff {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  role          String   @default("Career Specialist")
+  accountStatus String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  clients Client[]
+
+  @@map("staff")
+}
+
+model Client {
+  id                 String   @id @default(cuid())
+  name               String
+  email              String   @unique
+  phone              String?
+  targetRole         String
+  preferredLocation  String?
+  experienceLevel    String?
+  skills             String?
+  resumeUrl          String?
+  currentStage       String   @default("CONFIRMED")
+  paymentStatus      String   @default("PENDING")
+  assignedStaffId    String?
+  totalFee           Float    @default(0)
+  amountPaid         Float    @default(0)
+  balance            Float    @default(0)
+  planDurationMonths Int      @default(1)
+  planStartDate      DateTime @default(now())
+  planEndDate        DateTime
+  dailyTarget        Int      @default(60)
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  staff                  Staff?                   @relation(fields: [assignedStaffId], references: [id], onDelete: SetNull)
+  applications           Application[]
+  payments               Payment[]
+  interviews             Interview[]
+  recruiterCommunications RecruiterCommunication[]
+  stageHistory           ClientStageHistory[]
+  clientNotes            ClientNote[]
+  tasks                  ClientTask[]
+
+  @@map("clients")
+}
+
+model Application {
+  id               String    @id @default(cuid())
+  clientId         String
+  companyName      String
+  jobTitle         String
+  jobLocation      String?
+  jobPostingUrl    String?
+  applicationDate  DateTime  @default(now())
+  status           String    @default("APPLIED")
+  recruiterContact String?
+  notes            String?
+  followUpDate     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  client     Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  interviews Interview[]
+
+  @@map("applications")
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  clientId        String
+  amount          Float
+  paymentDate     DateTime @default(now())
+  paymentMethod   String   @default("UPI / Bank Transfer")
+  status          String   @default("COMPLETED")
+  referenceNumber String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model Interview {
+  id            String    @id @default(cuid())
+  clientId      String
+  applicationId String?
+  companyName   String
+  round         String    @default("Round 1")
+  scheduledAt   DateTime
+  status        String    @default("SCHEDULED")
+  meetingLink   String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  client      Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  @@map("interviews")
+}
+
+model RecruiterCommunication {
+  id                 String   @id @default(cuid())
+  clientId           String?
+  recruiterOrCompany String
+  subject            String
+  preview            String
+  type               String   @default("ACKNOWLEDGED")
+  receivedAt         DateTime @default(now())
+  status             String   @default("UNREAD")
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  client Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@map("recruiter_communications")
+}
+
+model ClientStageHistory {
+  id            String   @id @default(cuid())
+  clientId      String
+  previousStage String
+  newStage      String
+  changedBy     String   @default("Team")
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("client_stage_history")
+}
+
+model ClientNote {
+  id         String   @id @default(cuid())
+  clientId   String
+  content    String
+  authorName String   @default("Staff")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("client_notes")
+}
+
+model ClientTask {
+  id          String    @id @default(cuid())
+  clientId    String
+  title       String
+  dueDate     DateTime?
+  isCompleted Boolean   @default(false)
+  priority    String    @default("MEDIUM")
+  createdAt   DateTime  @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("client_tasks")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  type      String   @default("INFO")
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  entityType  String
+  entityId    String?
+  details     String?
+  performedBy String   @default("System")
+  createdAt   DateTime @default(now())
+
+  @@map("audit_logs")
+}
