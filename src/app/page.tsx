@@ -1,12 +1,34 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, RefreshCw, ChevronRight, MessageSquare, Clock, ArrowRight } from "lucide-react";
+import {
+  Plus,
+  RefreshCw,
+  ChevronRight,
+  MessageSquare,
+  Clock,
+  ArrowRight,
+  Users,
+  CreditCard,
+  Briefcase,
+  FileCheck2,
+  CalendarCheck2,
+  CheckCircle2,
+  Layers,
+  BarChart3,
+  ExternalLink,
+} from "lucide-react";
 import { STAGES, STAGE_LIST, StageKey } from "@/lib/types";
 import { ClientModal } from "@/components/ClientModal";
 import { ClientDrawer } from "@/components/ClientDrawer";
 
 interface SummaryData {
+  wholeCxCount: number;
+  paidCount: number;
+  ongoingJobsCount: number;
+  assessmentCount: number;
+  interviewCount: number;
+  closureCount: number;
   activeClients: number;
   applicationsToday: number;
   interviewsSecured: number;
@@ -20,6 +42,53 @@ interface PipelineClient {
   planDurationMonths: number;
   staffName: string;
   currentStage: string;
+}
+
+interface CxAnalysisData {
+  wholeCx: {
+    key: string;
+    title: string;
+    count: number;
+    description: string;
+    clients: any[];
+  };
+  paid: {
+    key: string;
+    title: string;
+    count: number;
+    description: string;
+    clients: any[];
+  };
+  ongoingJobs: {
+    key: string;
+    title: string;
+    count: number;
+    description: string;
+    clients: any[];
+  };
+  assessment: {
+    key: string;
+    title: string;
+    count: number;
+    clientCount?: number;
+    description: string;
+    clients: any[];
+  };
+  interview: {
+    key: string;
+    title: string;
+    count: number;
+    clientCount?: number;
+    description: string;
+    clients: any[];
+  };
+  cxClosureList: {
+    key: string;
+    title: string;
+    count: number;
+    description: string;
+    clients: any[];
+  };
 }
 
 interface TodayProgressItem {
@@ -48,11 +117,23 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [greeting, setGreeting] = useState("Good morning, team");
   const [summary, setSummary] = useState<SummaryData>({
+    wholeCxCount: 0,
+    paidCount: 0,
+    ongoingJobsCount: 0,
+    assessmentCount: 0,
+    interviewCount: 0,
+    closureCount: 0,
     activeClients: 0,
     applicationsToday: 0,
     interviewsSecured: 0,
     renewalsDue: 0,
   });
+
+  // Cx Analysis state
+  const [cxAnalysis, setCxAnalysis] = useState<CxAnalysisData | null>(null);
+  const [analysisViewMode, setAnalysisViewMode] = useState<"cxAnalysis" | "stages">("cxAnalysis");
+
+  // 9-Stage Pipeline state
   const [pipeline, setPipeline] = useState<Record<StageKey, { count: number; clients: PipelineClient[] }>>({
     CONFIRMED: { count: 0, clients: [] },
     PAID: { count: 0, clients: [] },
@@ -64,6 +145,7 @@ export default function DashboardPage() {
     REPORT: { count: 0, clients: [] },
     RENEWED_CLOSED: { count: 0, clients: [] },
   });
+
   const [todayProgress, setTodayProgress] = useState<TodayProgressItem[]>([]);
   const [recruiterInbox, setRecruiterInbox] = useState<RecruiterInboxItem[]>([]);
 
@@ -78,6 +160,7 @@ export default function DashboardPage() {
         const data = await res.json();
         setGreeting(data.greeting || "Good morning, team");
         setSummary(data.summary);
+        if (data.cxAnalysis) setCxAnalysis(data.cxAnalysis);
         if (data.pipeline) setPipeline(data.pipeline);
         if (data.todayProgress) setTodayProgress(data.todayProgress);
         if (data.recruiterInbox) setRecruiterInbox(data.recruiterInbox);
@@ -101,6 +184,9 @@ export default function DashboardPage() {
           <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-[#182232]">
             {greeting}
           </h1>
+          <p className="text-xs text-[#717B8A] mt-1">
+            Real-time client lifecycle analysis, active job pipelines, assessments, and interview tracker.
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -120,114 +206,462 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 4.2 Summary Cards (4 cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-        {/* Card 1: Active Clients */}
+      {/* 4.2 Cx Analyze Summary Cards (6 KPIs) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        {/* 1. Whole Cx Count */}
         <div
-          onClick={() => (window.location.href = "/clients")}
-          className="bg-white rounded-xl p-5 border border-[#EAE5DC] shadow-xs hover:border-[#DDD6C9] cursor-pointer transition-all"
+          onClick={() => {
+            setAnalysisViewMode("cxAnalysis");
+            window.location.href = "#cx-analysis-section";
+          }}
+          className="bg-white rounded-xl p-4 border border-[#EAE5DC] shadow-xs hover:border-[#E86328]/50 cursor-pointer transition-all"
         >
-          <p className="text-xs font-normal text-[#717B8A] mb-1">
-            Active clients
+          <div className="flex items-center justify-between text-[#717B8A] mb-1">
+            <span className="text-[11px] font-medium">Whole Cx</span>
+            <Users size={15} className="text-blue-500" />
+          </div>
+          <p className="text-2xl lg:text-3xl font-bold text-[#182232] tracking-tight">
+            {summary.wholeCxCount || summary.activeClients}
           </p>
-          <p className="text-3xl lg:text-4xl font-bold text-[#182232] tracking-tight">
-            {summary.activeClients}
-          </p>
+          <span className="text-[10px] text-[#9BA3AF] mt-0.5 block truncate">
+            Total Enrolled
+          </span>
         </div>
 
-        {/* Card 2: Applications Today */}
-        <div className="bg-white rounded-xl p-5 border border-[#EAE5DC] shadow-xs hover:border-[#DDD6C9] transition-all">
-          <p className="text-xs font-normal text-[#717B8A] mb-1">
-            Applications today
-          </p>
-          <p className="text-3xl lg:text-4xl font-bold text-[#182232] tracking-tight">
-            {summary.applicationsToday}
-          </p>
-        </div>
-
-        {/* Card 3: Interviews Secured */}
-        <div className="bg-white rounded-xl p-5 border border-[#EAE5DC] shadow-xs hover:border-[#DDD6C9] transition-all">
-          <p className="text-xs font-normal text-[#717B8A] mb-1">
-            Interviews secured
-          </p>
-          <p className="text-3xl lg:text-4xl font-bold text-[#182232] tracking-tight">
-            {summary.interviewsSecured}
-          </p>
-        </div>
-
-        {/* Card 4: Renewals Due */}
+        {/* 2. Paid */}
         <div
-          onClick={() => (window.location.href = "/clients?filter=renewals")}
-          className="bg-white rounded-xl p-5 border border-[#EAE5DC] shadow-xs hover:border-[#DDD6C9] cursor-pointer transition-all"
+          onClick={() => {
+            setAnalysisViewMode("cxAnalysis");
+            window.location.href = "#cx-analysis-section";
+          }}
+          className="bg-white rounded-xl p-4 border border-[#EAE5DC] shadow-xs hover:border-[#E86328]/50 cursor-pointer transition-all"
         >
-          <p className="text-xs font-normal text-[#717B8A] mb-1">
-            Renewals due
+          <div className="flex items-center justify-between text-[#717B8A] mb-1">
+            <span className="text-[11px] font-medium">Paid Cx</span>
+            <CreditCard size={15} className="text-emerald-500" />
+          </div>
+          <p className="text-2xl lg:text-3xl font-bold text-[#182232] tracking-tight">
+            {summary.paidCount}
           </p>
-          <p className="text-3xl lg:text-4xl font-bold text-[#182232] tracking-tight">
-            {summary.renewalsDue}
+          <span className="text-[10px] text-[#9BA3AF] mt-0.5 block truncate">
+            Fee Settled
+          </span>
+        </div>
+
+        {/* 3. Ongoing Jobs */}
+        <div
+          onClick={() => {
+            setAnalysisViewMode("cxAnalysis");
+            window.location.href = "#cx-analysis-section";
+          }}
+          className="bg-white rounded-xl p-4 border border-[#EAE5DC] shadow-xs hover:border-[#E86328]/50 cursor-pointer transition-all"
+        >
+          <div className="flex items-center justify-between text-[#717B8A] mb-1">
+            <span className="text-[11px] font-medium">Ongoing Jobs</span>
+            <Briefcase size={15} className="text-[#E86328]" />
+          </div>
+          <p className="text-2xl lg:text-3xl font-bold text-[#182232] tracking-tight">
+            {summary.ongoingJobsCount}
           </p>
+          <span className="text-[10px] text-[#9BA3AF] mt-0.5 block truncate">
+            Active Campaign
+          </span>
+        </div>
+
+        {/* 4. Assessment Count */}
+        <div
+          onClick={() => {
+            setAnalysisViewMode("cxAnalysis");
+            window.location.href = "#cx-analysis-section";
+          }}
+          className="bg-white rounded-xl p-4 border border-[#EAE5DC] shadow-xs hover:border-[#E86328]/50 cursor-pointer transition-all"
+        >
+          <div className="flex items-center justify-between text-[#717B8A] mb-1">
+            <span className="text-[11px] font-medium">Assessments</span>
+            <FileCheck2 size={15} className="text-purple-500" />
+          </div>
+          <p className="text-2xl lg:text-3xl font-bold text-[#182232] tracking-tight">
+            {summary.assessmentCount}
+          </p>
+          <span className="text-[10px] text-[#9BA3AF] mt-0.5 block truncate">
+            Tests Scheduled
+          </span>
+        </div>
+
+        {/* 5. Interviews */}
+        <div
+          onClick={() => {
+            setAnalysisViewMode("cxAnalysis");
+            window.location.href = "#cx-analysis-section";
+          }}
+          className="bg-white rounded-xl p-4 border border-[#EAE5DC] shadow-xs hover:border-[#E86328]/50 cursor-pointer transition-all"
+        >
+          <div className="flex items-center justify-between text-[#717B8A] mb-1">
+            <span className="text-[11px] font-medium">Interviews</span>
+            <CalendarCheck2 size={15} className="text-teal-500" />
+          </div>
+          <p className="text-2xl lg:text-3xl font-bold text-[#182232] tracking-tight">
+            {summary.interviewCount || summary.interviewsSecured}
+          </p>
+          <span className="text-[10px] text-[#9BA3AF] mt-0.5 block truncate">
+            Rounds Secured
+          </span>
+        </div>
+
+        {/* 6. Cx Closure List */}
+        <div
+          onClick={() => {
+            setAnalysisViewMode("cxAnalysis");
+            window.location.href = "#cx-analysis-section";
+          }}
+          className="bg-white rounded-xl p-4 border border-[#EAE5DC] shadow-xs hover:border-[#E86328]/50 cursor-pointer transition-all"
+        >
+          <div className="flex items-center justify-between text-[#717B8A] mb-1">
+            <span className="text-[11px] font-medium">Cx Closure</span>
+            <CheckCircle2 size={15} className="text-slate-600" />
+          </div>
+          <p className="text-2xl lg:text-3xl font-bold text-[#182232] tracking-tight">
+            {summary.closureCount}
+          </p>
+          <span className="text-[10px] text-[#9BA3AF] mt-0.5 block truncate">
+            Closed / Renewals
+          </span>
         </div>
       </div>
 
-      {/* 4.3 Client Pipeline */}
-      <div className="mb-8">
-        <h2 className="text-sm font-semibold text-[#182232] mb-3">
-          Client pipeline
-        </h2>
+      {/* 4.3 Client Pipeline & Cx Analyze Section */}
+      <div id="cx-analysis-section" className="mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-[#182232]">
+              {analysisViewMode === "cxAnalysis" ? "Client Analysis (Cx Lifecycle)" : "Full 9-Stage Client Pipeline"}
+            </h2>
+            <span className="text-xs text-[#717B8A] hidden sm:inline">
+              • Interactive candidate breakdown
+            </span>
+          </div>
 
-        {/* Horizontal scroll container */}
-        <div className="overflow-x-auto pb-4">
-          <div className="grid grid-flow-col auto-cols-[170px] xl:auto-cols-[1fr] gap-3 min-w-[1250px]">
-            {STAGE_LIST.map((stageKey) => {
-              const stageInfo = STAGES[stageKey];
-              const stageData = pipeline[stageKey] || { count: 0, clients: [] };
-
-              return (
-                <div
-                  key={stageKey}
-                  className="bg-[#F3EFE6]/60 rounded-xl p-3 border border-[#EAE5DC]/80 flex flex-col min-h-[160px]"
-                >
-                  {/* Column Header */}
-                  <div className="flex items-center justify-between mb-3 px-0.5">
-                    <span className="text-[10px] font-semibold tracking-wider uppercase text-[#717B8A] truncate">
-                      {stageInfo.label}
-                    </span>
-                    <span className="text-[11px] font-semibold text-[#717B8A]">
-                      {stageData.count}
-                    </span>
-                  </div>
-
-                  {/* Client Cards inside Stage */}
-                  <div className="space-y-2 flex-1">
-                    {stageData.clients.map((client) => (
-                      <div
-                        key={client.id}
-                        onClick={() => setSelectedClientId(client.id)}
-                        className="bg-white rounded-lg p-2.5 border border-[#EAE5DC] shadow-xs hover:shadow-sm hover:border-[#E86328]/40 cursor-pointer transition-all"
-                      >
-                        <h4 className="text-xs font-bold text-[#182232] leading-tight truncate">
-                          {client.name}
-                        </h4>
-                        <p className="text-[11px] text-[#717B8A] truncate mt-0.5">
-                          {client.targetRole}
-                        </p>
-                        <div className="mt-2 pt-1.5 border-t border-[#F1EBE1] text-[10px] text-[#9BA3AF] flex items-center justify-between">
-                          <span>{client.planDurationMonths} {client.planDurationMonths === 1 ? "Month" : "Months"}</span>
-                          <span className="truncate max-w-[70px] text-right">· {client.staffName}</span>
-                        </div>
-                      </div>
-                    ))}
-                    {stageData.clients.length === 0 && (
-                      <div className="h-full flex items-center justify-center text-[11px] text-[#B8AF9F] italic py-6">
-                        No clients
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+          {/* Toggle between Cx Analysis and 9-Stage Pipeline */}
+          <div className="flex items-center bg-[#EAE5DC]/60 p-1 rounded-lg text-xs font-semibold">
+            <button
+              onClick={() => setAnalysisViewMode("cxAnalysis")}
+              className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
+                analysisViewMode === "cxAnalysis"
+                  ? "bg-white text-[#E86328] shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <BarChart3 size={14} />
+              <span>Cx Analysis View</span>
+            </button>
+            <button
+              onClick={() => setAnalysisViewMode("stages")}
+              className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5 ${
+                analysisViewMode === "stages"
+                  ? "bg-white text-[#E86328] shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Layers size={14} />
+              <span>9-Stage Pipeline</span>
+            </button>
           </div>
         </div>
+
+        {/* VIEW 1: CX ANALYSIS VIEW (Whole Cx Count, Paid, Ongoing Jobs, Assessment, Interview, Cx Closure) */}
+        {analysisViewMode === "cxAnalysis" && cxAnalysis && (
+          <div className="overflow-x-auto pb-4">
+            <div className="grid grid-flow-col auto-cols-[230px] lg:auto-cols-[1fr] gap-4 min-w-[1380px]">
+              {/* Column 1: WHOLE CX COUNT */}
+              <div className="bg-[#F3EFE6]/70 rounded-xl p-3.5 border border-[#EAE5DC] flex flex-col min-h-[220px]">
+                <div className="flex items-center justify-between mb-2 pb-2 border-b border-[#EAE5DC]">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                    Whole Cx Count
+                  </span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                    {cxAnalysis.wholeCx.count}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 mb-2">Total candidate pool</p>
+                <div className="space-y-2 flex-1">
+                  {cxAnalysis.wholeCx.clients.map((c) => (
+                    <div
+                      key={c.id}
+                      onClick={() => setSelectedClientId(c.id)}
+                      className="bg-white rounded-lg p-2.5 border border-[#EAE5DC] shadow-xs hover:border-[#E86328] cursor-pointer transition-all"
+                    >
+                      <h4 className="text-xs font-bold text-[#182232] truncate">
+                        {c.name}
+                      </h4>
+                      <p className="text-[11px] text-[#717B8A] truncate mt-0.5">
+                        {c.targetRole}
+                      </p>
+                      <div className="mt-2 pt-1.5 border-t border-[#F1EBE1] text-[10px] text-[#717B8A] flex items-center justify-between">
+                        <span>{c.planDurationMonths}M Plan</span>
+                        <span className="font-medium text-slate-700">· {c.staffName}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Column 2: PAID CLIENTS */}
+              <div className="bg-[#F3EFE6]/70 rounded-xl p-3.5 border border-[#EAE5DC] flex flex-col min-h-[220px]">
+                <div className="flex items-center justify-between mb-2 pb-2 border-b border-[#EAE5DC]">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                    Paid
+                  </span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                    {cxAnalysis.paid.count}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 mb-2">Fee verified & confirmed</p>
+                <div className="space-y-2 flex-1">
+                  {cxAnalysis.paid.clients.map((c) => (
+                    <div
+                      key={c.id}
+                      onClick={() => setSelectedClientId(c.id)}
+                      className="bg-white rounded-lg p-2.5 border border-[#EAE5DC] shadow-xs hover:border-[#E86328] cursor-pointer transition-all"
+                    >
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-[#182232] truncate">
+                          {c.name}
+                        </h4>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      </div>
+                      <p className="text-[11px] text-[#717B8A] truncate mt-0.5">
+                        {c.targetRole}
+                      </p>
+                      <div className="mt-2 pt-1.5 border-t border-[#F1EBE1] text-[10px] text-[#717B8A] flex items-center justify-between">
+                        <span className="text-emerald-700 font-semibold">₹{(c.amountPaid || 0).toLocaleString()} Paid</span>
+                        <span className="font-medium text-slate-700">· {c.staffName}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {cxAnalysis.paid.clients.length === 0 && (
+                    <div className="h-full flex items-center justify-center text-xs text-slate-400 italic py-6">
+                      No paid clients
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Column 3: ONGOING JOBS */}
+              <div className="bg-[#F3EFE6]/70 rounded-xl p-3.5 border border-[#EAE5DC] flex flex-col min-h-[220px]">
+                <div className="flex items-center justify-between mb-2 pb-2 border-b border-[#EAE5DC]">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                    Ongoing Jobs
+                  </span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                    {cxAnalysis.ongoingJobs.count}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 mb-2">Active application progress</p>
+                <div className="space-y-2 flex-1">
+                  {cxAnalysis.ongoingJobs.clients.map((c) => (
+                    <div
+                      key={c.id}
+                      onClick={() => setSelectedClientId(c.id)}
+                      className="bg-white rounded-lg p-2.5 border border-[#EAE5DC] shadow-xs hover:border-[#E86328] cursor-pointer transition-all"
+                    >
+                      <h4 className="text-xs font-bold text-[#182232] truncate">
+                        {c.name}
+                      </h4>
+                      <p className="text-[11px] text-[#717B8A] truncate mt-0.5">
+                        {c.targetRole}
+                      </p>
+                      <div className="mt-2 pt-1.5 border-t border-[#F1EBE1] text-[10px] text-[#717B8A] flex items-center justify-between">
+                        <span className="text-[#E86328] font-bold">{c.totalApps} Applied</span>
+                        <span className="font-medium text-slate-700">· {c.staffName}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {cxAnalysis.ongoingJobs.clients.length === 0 && (
+                    <div className="h-full flex items-center justify-center text-xs text-slate-400 italic py-6">
+                      No ongoing job applications
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Column 4: ASSESSMENT COUNT */}
+              <div className="bg-[#F3EFE6]/70 rounded-xl p-3.5 border border-[#EAE5DC] flex flex-col min-h-[220px]">
+                <div className="flex items-center justify-between mb-2 pb-2 border-b border-[#EAE5DC]">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                    Assessment Count
+                  </span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">
+                    {cxAnalysis.assessment.count}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 mb-2">Technical tests scheduled</p>
+                <div className="space-y-2 flex-1">
+                  {cxAnalysis.assessment.clients.map((c) => (
+                    <div
+                      key={c.id}
+                      onClick={() => setSelectedClientId(c.id)}
+                      className="bg-white rounded-lg p-2.5 border border-[#EAE5DC] shadow-xs hover:border-[#E86328] cursor-pointer transition-all"
+                    >
+                      <h4 className="text-xs font-bold text-[#182232] truncate">
+                        {c.name}
+                      </h4>
+                      <p className="text-[11px] text-[#717B8A] truncate mt-0.5">
+                        {c.targetRole}
+                      </p>
+                      <div className="mt-2 pt-1.5 border-t border-[#F1EBE1] text-[10px] text-[#717B8A] flex items-center justify-between">
+                        <span className="text-purple-700 font-bold">{c.assessmentsCount} Tests</span>
+                        <span className="font-medium text-slate-700">· {c.staffName}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {cxAnalysis.assessment.clients.length === 0 && (
+                    <div className="h-full flex items-center justify-center text-xs text-slate-400 italic py-6">
+                      No assessments logged
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Column 5: INTERVIEWS */}
+              <div className="bg-[#F3EFE6]/70 rounded-xl p-3.5 border border-[#EAE5DC] flex flex-col min-h-[220px]">
+                <div className="flex items-center justify-between mb-2 pb-2 border-b border-[#EAE5DC]">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                    Interview
+                  </span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-teal-100 text-teal-800">
+                    {cxAnalysis.interview.count}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 mb-2">Interviews confirmed & secured</p>
+                <div className="space-y-2 flex-1">
+                  {cxAnalysis.interview.clients.map((c) => (
+                    <div
+                      key={c.id}
+                      onClick={() => setSelectedClientId(c.id)}
+                      className="bg-white rounded-lg p-2.5 border border-[#EAE5DC] shadow-xs hover:border-[#E86328] cursor-pointer transition-all"
+                    >
+                      <h4 className="text-xs font-bold text-[#182232] truncate">
+                        {c.name}
+                      </h4>
+                      <p className="text-[11px] text-[#717B8A] truncate mt-0.5">
+                        {c.targetRole}
+                      </p>
+                      <div className="mt-2 pt-1.5 border-t border-[#F1EBE1] text-[10px] text-[#717B8A] flex items-center justify-between">
+                        <span className="text-teal-700 font-bold">{c.interviewsCount} Rounds</span>
+                        <span className="font-medium text-slate-700">· {c.staffName}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {cxAnalysis.interview.clients.length === 0 && (
+                    <div className="h-full flex items-center justify-center text-xs text-slate-400 italic py-6">
+                      No interviews secured yet
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Column 6: CX CLOSURE LIST */}
+              <div className="bg-[#F3EFE6]/70 rounded-xl p-3.5 border border-[#EAE5DC] flex flex-col min-h-[220px]">
+                <div className="flex items-center justify-between mb-2 pb-2 border-b border-[#EAE5DC]">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                    Cx Closure List
+                  </span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-800">
+                    {cxAnalysis.cxClosureList.count}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 mb-2">Service closure & renewal status</p>
+                <div className="space-y-2 flex-1">
+                  {cxAnalysis.cxClosureList.clients.map((c) => (
+                    <div
+                      key={c.id}
+                      onClick={() => setSelectedClientId(c.id)}
+                      className="bg-white rounded-lg p-2.5 border border-[#EAE5DC] shadow-xs hover:border-[#E86328] cursor-pointer transition-all"
+                    >
+                      <h4 className="text-xs font-bold text-[#182232] truncate">
+                        {c.name}
+                      </h4>
+                      <p className="text-[11px] text-[#717B8A] truncate mt-0.5">
+                        {c.targetRole}
+                      </p>
+                      <div className="mt-2 pt-1.5 border-t border-[#F1EBE1] text-[10px] text-[#717B8A] flex items-center justify-between">
+                        <span className="text-slate-600 font-semibold">{c.currentStage}</span>
+                        <span className="font-medium text-slate-700">· {c.staffName}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {cxAnalysis.cxClosureList.clients.length === 0 && (
+                    <div className="h-full flex flex-col items-center justify-center text-center text-xs text-slate-400 py-6">
+                      <span>No closed clients</span>
+                      <button
+                        onClick={() => (window.location.href = "/clients")}
+                        className="mt-2 text-[11px] text-[#E86328] hover:underline"
+                      >
+                        Close / Renew Client &rarr;
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 2: 9-STAGE PIPELINE (With fixed comfortable spacing & badges) */}
+        {analysisViewMode === "stages" && (
+          <div className="overflow-x-auto pb-4">
+            <div className="grid grid-flow-col auto-cols-[210px] gap-3.5 min-w-[1900px]">
+              {STAGE_LIST.map((stageKey) => {
+                const stageInfo = STAGES[stageKey];
+                const stageData = pipeline[stageKey] || { count: 0, clients: [] };
+
+                return (
+                  <div
+                    key={stageKey}
+                    className="bg-[#F3EFE6]/70 rounded-xl p-3 border border-[#EAE5DC] flex flex-col min-h-[170px]"
+                  >
+                    {/* Fixed Column Header with proper spacing and badge pill */}
+                    <div className="flex items-center justify-between mb-3 px-1 pb-2 border-b border-[#EAE5DC]">
+                      <span className="text-xs font-bold tracking-wider uppercase text-slate-700 truncate pr-2">
+                        {stageInfo.label}
+                      </span>
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#E86328]/10 text-[#E86328] shrink-0">
+                        {stageData.count}
+                      </span>
+                    </div>
+
+                    {/* Client Cards inside Stage */}
+                    <div className="space-y-2 flex-1">
+                      {stageData.clients.map((client) => (
+                        <div
+                          key={client.id}
+                          onClick={() => setSelectedClientId(client.id)}
+                          className="bg-white rounded-lg p-2.5 border border-[#EAE5DC] shadow-xs hover:shadow-sm hover:border-[#E86328] cursor-pointer transition-all"
+                        >
+                          <h4 className="text-xs font-bold text-[#182232] leading-tight truncate">
+                            {client.name}
+                          </h4>
+                          <p className="text-[11px] text-[#717B8A] truncate mt-0.5">
+                            {client.targetRole}
+                          </p>
+                          <div className="mt-2 pt-1.5 border-t border-[#F1EBE1] text-[10px] text-[#717B8A] flex items-center justify-between">
+                            <span>{client.planDurationMonths} {client.planDurationMonths === 1 ? "Month" : "Months"}</span>
+                            <span className="font-medium text-slate-700 truncate">· {client.staffName}</span>
+                          </div>
+                        </div>
+                      ))}
+                      {stageData.clients.length === 0 && (
+                        <div className="h-full flex items-center justify-center text-xs text-[#B8AF9F] italic py-6">
+                          No clients
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Row 4: Side-by-Side Sections */}
@@ -235,11 +669,16 @@ export default function DashboardPage() {
         {/* 4.4 Today's Application Progress (approx 65% = 8 cols) */}
         <div className="lg:col-span-8 bg-white rounded-xl p-6 border border-[#EAE5DC] shadow-xs">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-semibold text-[#182232]">
-              Today's application progress
-            </h3>
-            <span className="text-xs text-[#717B8A]">
-              Real-time daily tracker
+            <div>
+              <h3 className="text-sm font-semibold text-[#182232]">
+                Today's application progress
+              </h3>
+              <p className="text-xs text-[#717B8A] mt-0.5">
+                Real-time daily target completion per candidate
+              </p>
+            </div>
+            <span className="text-xs font-medium text-[#E86328] bg-orange-50 px-2.5 py-1 rounded-full">
+              Live Progress
             </span>
           </div>
 

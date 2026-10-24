@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 node_modules
 .next
 out
@@ -8,14 +7,3 @@ out
 .env*.local
 dev.db
 dev.db-journal
-=======
-node_modules
-.next
-out
-.DS_Store
-*.log
-.env
-.env*.local
-dev.db
-dev.db-journal
->>>>>>> 4ee991388fe8faf519ad93740373adace2ecb6d4
