@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Menu, X } from "lucide-react";
+import { LayoutDashboard, Users, UserCheck, Menu, X } from "lucide-react";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -21,6 +21,12 @@ export function Sidebar() {
       href: "/clients",
       icon: Users,
       active: pathname.startsWith("/clients"),
+    },
+    {
+      name: "Staff",
+      href: "/staff",
+      icon: UserCheck,
+      active: pathname.startsWith("/staff"),
     },
   ];
 
