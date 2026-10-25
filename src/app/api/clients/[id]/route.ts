@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendClientUpdateEmail } from "@/lib/email";
 
 export async function GET(
   req: NextRequest,
@@ -45,10 +46,18 @@ export async function GET(
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
+    // Also fetch recent portal access logs
+    const portalLogs = await prisma.portalAccessLog.findMany({
+      where: { clientId: id },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    });
+
     return NextResponse.json({
       client: {
         ...client,
         totalApplicationsCount: client._count.applications,
+        portalAccessLogs: portalLogs,
       },
     });
   } catch (error: any) {
@@ -92,6 +101,21 @@ export async function PATCH(
       }
     }
 
+    // Portal token regeneration support
+    let portalToken = existingClient.portalToken;
+    if (body.regenerateToken) {
+      const slug = (body.name || existingClient.name).toLowerCase().replace(/[^a-z0-9]/g, "-");
+      const randomSuffix = Math.random().toString(36).substring(2, 7);
+      portalToken = `cx-${slug}-${randomSuffix}`;
+    } else if (body.portalToken !== undefined) {
+      portalToken = body.portalToken;
+    }
+
+    const portalEnabled =
+      body.portalEnabled !== undefined
+        ? Boolean(body.portalEnabled)
+        : existingClient.portalEnabled;
+
     const updatedClient = await prisma.client.update({
       where: { id },
       data: {
@@ -121,6 +145,8 @@ export async function PATCH(
           : existingClient.planEndDate,
         dailyTarget: body.dailyTarget ?? existingClient.dailyTarget,
         notes: body.notes ?? existingClient.notes,
+        portalEnabled,
+        portalToken,
       },
       include: {
         staff: true,
@@ -132,10 +158,20 @@ export async function PATCH(
         action: "UPDATE_CLIENT",
         entityType: "CLIENT",
         entityId: id,
-        details: `Updated details for ${updatedClient.name}`,
+        details: `Updated details for ${updatedClient.name}${body.regenerateToken ? " (Portal token regenerated)" : ""}`,
         performedBy: "Staff Member",
       },
     });
+
+    // Dispatch real-time profile update confirmation email to candidate
+    if (updatedClient.email && (body.targetRole || body.dailyTarget || body.skills)) {
+      await sendClientUpdateEmail({
+        to: updatedClient.email,
+        candidateName: updatedClient.name,
+        targetRole: updatedClient.targetRole,
+        specialistName: updatedClient.staff?.name || "Career Specialist",
+      }).catch((err) => console.error("Client update email error:", err));
+    }
 
     return NextResponse.json({ client: updatedClient });
   } catch (error: any) {
@@ -153,26 +189,37 @@ export async function DELETE(
 ) {
   try {
     const { id } = params;
+
     const client = await prisma.client.findUnique({ where: { id } });
     if (!client) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
-    await prisma.client.delete({
-      where: { id },
-    });
+    await prisma.$transaction([
+      prisma.portalAccessLog.deleteMany({ where: { clientId: id } }),
+      prisma.clientTask.deleteMany({ where: { clientId: id } }),
+      prisma.clientNote.deleteMany({ where: { clientId: id } }),
+      prisma.clientStageHistory.deleteMany({ where: { clientId: id } }),
+      prisma.recruiterCommunication.deleteMany({ where: { clientId: id } }),
+      prisma.interview.deleteMany({ where: { clientId: id } }),
+      prisma.payment.deleteMany({ where: { clientId: id } }),
+      prisma.application.deleteMany({ where: { clientId: id } }),
+      prisma.client.delete({ where: { id } }),
+      prisma.auditLog.create({
+        data: {
+          action: "DELETE_CLIENT",
+          entityType: "CLIENT",
+          entityId: id,
+          details: `Deleted candidate ${client.name} (${client.email})`,
+          performedBy: "Staff Member",
+        },
+      }),
+    ]);
 
-    await prisma.auditLog.create({
-      data: {
-        action: "DELETE_CLIENT",
-        entityType: "CLIENT",
-        entityId: id,
-        details: `Deleted client ${client.name} (${client.email})`,
-        performedBy: "Staff Member",
-      },
+    return NextResponse.json({
+      success: true,
+      message: `Client ${client.name} deleted successfully`,
     });
-
-    return NextResponse.json({ success: true, message: "Client deleted successfully" });
   } catch (error: any) {
     console.error("DELETE /api/clients/[id] error:", error);
     return NextResponse.json(

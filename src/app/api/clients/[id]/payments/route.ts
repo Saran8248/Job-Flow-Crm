@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendPaymentConfirmationEmail } from "@/lib/email";
 
 export async function GET(
   req: NextRequest,
@@ -76,12 +77,31 @@ export async function POST(
         }
       }
 
+      let newStage = client.currentStage;
+      if (client.currentStage === "CONFIRMED" && (newPaymentStatus === "PAID" || newPaymentStatus === "PARTIALLY_PAID")) {
+        newStage = "PAID";
+        await tx.clientStageHistory.create({
+          data: {
+            clientId: id,
+            previousStage: "CONFIRMED",
+            newStage: "PAID",
+            changedBy: "System (Payment Confirmation)",
+            notes: `Auto-advanced to PAID on payment receipt of ₹${numAmount.toLocaleString()}`,
+            clientNote: `Payment of ₹${numAmount.toLocaleString()} confirmed. Milestone advanced to Paid.`,
+          },
+        });
+      }
+
       const updatedClient = await tx.client.update({
         where: { id },
         data: {
           amountPaid: updatedAmountPaid,
           balance: newBalance,
           paymentStatus: newPaymentStatus,
+          currentStage: newStage,
+        },
+        include: {
+          staff: true,
         },
       });
 
@@ -105,6 +125,19 @@ export async function POST(
 
       return { payment, client: updatedClient };
     });
+
+    // Dispatch real-time payment confirmation email to candidate
+    if (result.client.email) {
+      await sendPaymentConfirmationEmail({
+        to: result.client.email,
+        candidateName: result.client.name,
+        amount: numAmount,
+        paymentMethod,
+        paymentStatus: result.client.paymentStatus,
+        balance: result.client.balance,
+        specialistName: result.client.staff?.name || "Career Specialist",
+      }).catch((err) => console.error("Payment email error:", err));
+    }
 
     return NextResponse.json(result, { status: 201 });
   } catch (error: any) {

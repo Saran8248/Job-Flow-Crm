@@ -20,6 +20,13 @@ import {
   AlertTriangle,
   RefreshCw,
   Trash2,
+  KeyRound,
+  Copy,
+  Check,
+  Eye,
+  ShieldCheck,
+  Pencil,
+  Save,
 } from "lucide-react";
 import { STAGES, STAGE_LIST, StageKey, PAYMENT_STATUSES } from "@/lib/types";
 import { formatDate, formatDateTime, formatCurrency } from "@/lib/utils";
@@ -34,14 +41,17 @@ export function ClientDrawer({ clientId, onClose, onUpdate }: ClientDrawerProps)
   const [client, setClient] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    "overview" | "applications" | "payments" | "interviews" | "communications" | "notes" | "history"
+    "overview" | "applications" | "payments" | "interviews" | "communications" | "notes" | "history" | "portal"
   >("overview");
   const [staffList, setStaffList] = useState<any[]>([]);
 
   // Action modals/inputs
   const [newStage, setNewStage] = useState<StageKey | "">("");
   const [stageNotes, setStageNotes] = useState("");
+  const [stageClientNote, setStageClientNote] = useState("");
   const [changingStage, setChangingStage] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [updatingPortal, setUpdatingPortal] = useState(false);
 
   // New Application inputs
   const [showAddApp, setShowAddApp] = useState(false);
@@ -70,6 +80,18 @@ export function ClientDrawer({ clientId, onClose, onUpdate }: ClientDrawerProps)
 
   // Notification / error feedback
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  // Edit Profile Details State
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editTargetRole, setEditTargetRole] = useState("");
+  const [editPreferredLocation, setEditPreferredLocation] = useState("");
+  const [editExperienceLevel, setEditExperienceLevel] = useState("");
+  const [editSkills, setEditSkills] = useState("");
+  const [editResumeUrl, setEditResumeUrl] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
 
   useEffect(() => {
     if (clientId) {
@@ -118,11 +140,13 @@ export function ClientDrawer({ clientId, onClose, onUpdate }: ClientDrawerProps)
         body: JSON.stringify({
           newStage,
           notes: stageNotes || `Stage updated to ${STAGES[newStage as StageKey].label}`,
+          clientNote: stageClientNote || `Milestone updated to ${STAGES[newStage as StageKey].label}`,
         }),
       });
       if (res.ok) {
         setMessage({ text: "Stage updated successfully!", type: "success" });
         setStageNotes("");
+        setStageClientNote("");
         await loadClient(client.id);
         onUpdate();
       }
@@ -130,6 +154,121 @@ export function ClientDrawer({ clientId, onClose, onUpdate }: ClientDrawerProps)
       setMessage({ text: "Failed to update stage", type: "error" });
     } finally {
       setChangingStage(false);
+    }
+  };
+
+  const handleDeleteClient = async () => {
+    if (!client) return;
+    if (!confirm(`Are you sure you want to delete client "${client.name}"? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/clients/${client.id}`, { method: "DELETE" });
+      if (res.ok) {
+        onClose();
+        onUpdate();
+      } else {
+        setMessage({ text: "Failed to delete client", type: "error" });
+      }
+    } catch {
+      setMessage({ text: "Error deleting client", type: "error" });
+    }
+  };
+
+  const startEditingProfile = () => {
+    if (!client) return;
+    setEditName(client.name || "");
+    setEditEmail(client.email || "");
+    setEditPhone(client.phone || "");
+    setEditTargetRole(client.targetRole || "");
+    setEditPreferredLocation(client.preferredLocation || "");
+    setEditExperienceLevel(client.experienceLevel || "");
+    setEditSkills(client.skills || "");
+    setEditResumeUrl(client.resumeUrl || "");
+    setIsEditingProfile(true);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!client) return;
+    setSavingProfile(true);
+    try {
+      const res = await fetch(`/api/clients/${client.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editName.trim(),
+          email: editEmail.trim(),
+          phone: editPhone.trim(),
+          targetRole: editTargetRole.trim(),
+          preferredLocation: editPreferredLocation.trim(),
+          experienceLevel: editExperienceLevel.trim(),
+          skills: editSkills.trim(),
+          resumeUrl: editResumeUrl.trim(),
+        }),
+      });
+
+      if (res.ok) {
+        setMessage({ text: "Contact & Profile info updated successfully!", type: "success" });
+        setIsEditingProfile(false);
+        await loadClient(client.id);
+        onUpdate();
+      } else {
+        const data = await res.json();
+        setMessage({ text: data.error || "Failed to update profile", type: "error" });
+      }
+    } catch {
+      setMessage({ text: "Error saving profile details", type: "error" });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleTogglePortal = async () => {
+    if (!client) return;
+    setUpdatingPortal(true);
+    try {
+      const res = await fetch(`/api/clients/${client.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ portalEnabled: !client.portalEnabled }),
+      });
+      if (res.ok) {
+        setMessage({
+          text: `Candidate portal ${!client.portalEnabled ? "enabled" : "disabled"} successfully!`,
+          type: "success",
+        });
+        await loadClient(client.id);
+        onUpdate();
+      }
+    } catch {
+      setMessage({ text: "Failed to update portal access", type: "error" });
+    } finally {
+      setUpdatingPortal(false);
+    }
+  };
+
+  const handleRegenerateToken = async () => {
+    if (!client) return;
+    if (!confirm("Are you sure you want to revoke the current token? The candidate's previous secret link will stop working.")) {
+      return;
+    }
+    setUpdatingPortal(true);
+    try {
+      const res = await fetch(`/api/clients/${client.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ regenerateToken: true }),
+      });
+      if (res.ok) {
+        setMessage({ text: "New portal token generated and previous token revoked!", type: "success" });
+        await loadClient(client.id);
+        onUpdate();
+      }
+    } catch {
+      setMessage({ text: "Failed to regenerate token", type: "error" });
+    } finally {
+      setUpdatingPortal(false);
     }
   };
 
@@ -278,12 +417,21 @@ export function ClientDrawer({ clientId, onClose, onUpdate }: ClientDrawerProps)
               </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleDeleteClient}
+              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+              title="Delete client"
+            >
+              <Trash2 size={18} />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Feedback Alert */}
@@ -306,6 +454,7 @@ export function ClientDrawer({ clientId, onClose, onUpdate }: ClientDrawerProps)
         <div className="bg-white px-6 border-b border-[#EAE5DC] flex gap-6 text-xs font-medium overflow-x-auto">
           {[
             { key: "overview", label: "Overview" },
+            { key: "portal", label: `Candidate Portal ⚡` },
             { key: "applications", label: `Applications (${client?._count?.applications || 0})` },
             { key: "payments", label: `Payments (${client?.payments?.length || 0})` },
             { key: "interviews", label: `Interviews (${client?.interviews?.length || 0})` },
@@ -358,25 +507,46 @@ export function ClientDrawer({ clientId, onClose, onUpdate }: ClientDrawerProps)
                       </span>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-2 mt-4 pt-4 border-t border-gray-100">
-                      <select
-                        value={newStage}
-                        onChange={(e) => setNewStage(e.target.value as StageKey)}
-                        className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-1 focus:ring-[#E86328]"
-                      >
-                        {STAGE_LIST.map((key) => (
-                          <option key={key} value={key}>
-                            Move to: {STAGES[key].label}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={handleStageChange}
-                        disabled={changingStage || newStage === client.currentStage}
-                        className="px-4 py-2 text-xs font-medium bg-[#E86328] hover:bg-[#D2541C] text-white rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {changingStage ? "Updating..." : "Update Stage"}
-                      </button>
+                    <div className="space-y-2 mt-4 pt-4 border-t border-gray-100">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <select
+                          value={newStage}
+                          onChange={(e) => setNewStage(e.target.value as StageKey)}
+                          className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-1 focus:ring-[#E86328]"
+                        >
+                          {STAGE_LIST.map((key) => (
+                            <option key={key} value={key}>
+                              Move to: {STAGES[key].label}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={handleStageChange}
+                          disabled={changingStage || newStage === client.currentStage}
+                          className="px-4 py-2 text-xs font-medium bg-[#E86328] hover:bg-[#D2541C] text-white rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {changingStage ? "Updating..." : "Update Stage"}
+                        </button>
+                      </div>
+
+                      {newStage !== client.currentStage && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                          <input
+                            type="text"
+                            placeholder="Internal staff transition note (private)..."
+                            value={stageNotes}
+                            onChange={(e) => setStageNotes(e.target.value)}
+                            className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-slate-50 focus:bg-white focus:outline-none"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Candidate update message (visible on Candidate Portal)..."
+                            value={stageClientNote}
+                            onChange={(e) => setStageClientNote(e.target.value)}
+                            className="text-xs px-3 py-1.5 rounded-lg border border-orange-200 bg-orange-50/50 focus:bg-white text-slate-800 focus:outline-none"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -432,56 +602,198 @@ export function ClientDrawer({ clientId, onClose, onUpdate }: ClientDrawerProps)
 
                   {/* Client Details Section */}
                   <div className="bg-white rounded-xl p-5 border border-[#EAE5DC] space-y-4">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                      Contact & Profile Info
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 text-xs">
-                      <div>
-                        <span className="text-slate-400 block mb-0.5">Email</span>
-                        <a
-                          href={`mailto:${client.email}`}
-                          className="font-medium text-[#E86328] hover:underline"
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                        Contact & Profile Info
+                      </h3>
+                      {!isEditingProfile && (
+                        <button
+                          type="button"
+                          onClick={startEditingProfile}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-[#E86328] hover:text-white hover:bg-[#E86328] bg-orange-50 border border-orange-200 rounded-lg transition-all shadow-2xs"
                         >
-                          {client.email}
-                        </a>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block mb-0.5">Phone</span>
-                        <span className="font-medium text-slate-700">{client.phone || "—"}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block mb-0.5">Preferred Location</span>
-                        <span className="font-medium text-slate-700">
-                          {client.preferredLocation || "Not specified"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block mb-0.5">Experience Level</span>
-                        <span className="font-medium text-slate-700">
-                          {client.experienceLevel || "Not specified"}
-                        </span>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <span className="text-slate-400 block mb-0.5">Core Skills</span>
-                        <span className="font-medium text-slate-700">
-                          {client.skills || "Not specified"}
-                        </span>
-                      </div>
-                      {client.resumeUrl && (
-                        <div className="sm:col-span-2">
-                          <span className="text-slate-400 block mb-0.5">Resume</span>
-                          <a
-                            href={client.resumeUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 font-medium text-[#E86328] hover:underline"
-                          >
-                            <span>Open Resume Link</span>
-                            <ExternalLink size={12} />
-                          </a>
-                        </div>
+                          <Pencil size={12} />
+                          <span>Edit Details</span>
+                        </button>
                       )}
                     </div>
+
+                    {!isEditingProfile ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 text-xs">
+                        <div>
+                          <span className="text-slate-400 block mb-0.5">Email</span>
+                          <a
+                            href={`mailto:${client.email}`}
+                            className="font-medium text-[#E86328] hover:underline"
+                          >
+                            {client.email}
+                          </a>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block mb-0.5">Phone</span>
+                          <span className="font-medium text-slate-700">{client.phone || "—"}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block mb-0.5">Preferred Location</span>
+                          <span className="font-medium text-slate-700">
+                            {client.preferredLocation || "Not specified"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block mb-0.5">Experience Level</span>
+                          <span className="font-medium text-slate-700">
+                            {client.experienceLevel || "Not specified"}
+                          </span>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <span className="text-slate-400 block mb-0.5">Core Skills</span>
+                          <span className="font-medium text-slate-700">
+                            {client.skills || "Not specified"}
+                          </span>
+                        </div>
+                        {client.resumeUrl && (
+                          <div className="sm:col-span-2">
+                            <span className="text-slate-400 block mb-0.5">Resume</span>
+                            <a
+                              href={client.resumeUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 font-medium text-[#E86328] hover:underline"
+                            >
+                              <span>Open Resume Link</span>
+                              <ExternalLink size={12} />
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <form onSubmit={handleSaveProfile} className="space-y-3 pt-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                              Full Name
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#E86328]"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                              Email Address
+                            </label>
+                            <input
+                              type="email"
+                              required
+                              value={editEmail}
+                              onChange={(e) => setEditEmail(e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#E86328]"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                              Phone Number
+                            </label>
+                            <input
+                              type="text"
+                              value={editPhone}
+                              onChange={(e) => setEditPhone(e.target.value)}
+                              placeholder="e.g. 8248286612"
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#E86328]"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                              Target Role
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={editTargetRole}
+                              onChange={(e) => setEditTargetRole(e.target.value)}
+                              placeholder="e.g. AI Engineer"
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#E86328]"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                              Preferred Location
+                            </label>
+                            <input
+                              type="text"
+                              value={editPreferredLocation}
+                              onChange={(e) => setEditPreferredLocation(e.target.value)}
+                              placeholder="e.g. Chennai / Remote"
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#E86328]"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                              Experience Level
+                            </label>
+                            <input
+                              type="text"
+                              value={editExperienceLevel}
+                              onChange={(e) => setEditExperienceLevel(e.target.value)}
+                              placeholder="e.g. 3 Years"
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#E86328]"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                              Core Skills (comma separated)
+                            </label>
+                            <input
+                              type="text"
+                              value={editSkills}
+                              onChange={(e) => setEditSkills(e.target.value)}
+                              placeholder="e.g. Python, PyTorch, React, Next.js"
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#E86328]"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                              Resume URL / Portfolio Link
+                            </label>
+                            <input
+                              type="text"
+                              value={editResumeUrl}
+                              onChange={(e) => setEditResumeUrl(e.target.value)}
+                              placeholder="https://..."
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#E86328]"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingProfile(false)}
+                            className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 text-xs font-medium transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={savingProfile}
+                            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#E86328] hover:bg-[#D2541C] text-white text-xs font-bold transition-colors shadow-2xs disabled:opacity-50"
+                          >
+                            <Save size={13} />
+                            <span>{savingProfile ? "Saving..." : "Save Details"}</span>
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </div>
 
                   {/* Staff Reassignment Quick Control */}
@@ -967,6 +1279,11 @@ export function ClientDrawer({ clientId, onClose, onUpdate }: ClientDrawerProps)
                               {h.previousStage} &rarr; {h.newStage}
                             </div>
                             <div className="text-slate-500 mt-0.5">{h.notes}</div>
+                            {h.clientNote && (
+                              <div className="text-[11px] text-[#E86328] mt-0.5 font-medium">
+                                Portal message: &quot;{h.clientNote}&quot;
+                              </div>
+                            )}
                             <div className="text-[11px] text-slate-400 mt-1">
                               By {h.changedBy} on {formatDateTime(h.createdAt)}
                             </div>
@@ -979,6 +1296,152 @@ export function ClientDrawer({ clientId, onClose, onUpdate }: ClientDrawerProps)
                       No stage history recorded yet.
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* TAB 8: CANDIDATE PORTAL */}
+              {activeTab === "portal" && (
+                <div className="space-y-6">
+                  {/* Status Banner */}
+                  <div className="bg-white rounded-xl p-5 border border-[#EAE5DC] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-slate-900">
+                          Candidate Portal Status:
+                        </span>
+                        <span
+                          className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
+                            client.portalEnabled
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {client.portalEnabled ? "Active & Accessible" : "Disabled"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        When enabled, {client.name} can log in to view their applications, assessments, and interview calendar.
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={handleTogglePortal}
+                      disabled={updatingPortal}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-xs ${
+                        client.portalEnabled
+                          ? "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200"
+                          : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                      }`}
+                    >
+                      {updatingPortal
+                        ? "Saving..."
+                        : client.portalEnabled
+                        ? "Disable Candidate Access"
+                        : "Enable Candidate Access"}
+                    </button>
+                  </div>
+
+                  {/* Secret Link Card */}
+                  <div className="bg-white rounded-xl p-5 border border-[#EAE5DC] shadow-xs space-y-4">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <KeyRound size={14} className="text-[#E86328]" />
+                        <span>Direct Candidate Access Link (One-Click)</span>
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Share this private link with {client.name}. It grants instant, passwordless access to their candidate cockpit.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={
+                          typeof window !== "undefined"
+                            ? `${window.location.origin}/portal/login?token=${client.portalToken || ""}`
+                            : `/portal/login?token=${client.portalToken || ""}`
+                        }
+                        className="flex-1 px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-mono select-all focus:outline-none"
+                      />
+                      <button
+                        onClick={() => {
+                          const link = `${window.location.origin}/portal/login?token=${client.portalToken || ""}`;
+                          navigator.clipboard.writeText(link);
+                          setCopiedLink(true);
+                          setTimeout(() => setCopiedLink(false), 2000);
+                        }}
+                        className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors"
+                      >
+                        {copiedLink ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                        <span>{copiedLink ? "Copied!" : "Copy Link"}</span>
+                      </button>
+
+                      <a
+                        href={`/portal/login?token=${client.portalToken || ""}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3.5 py-2 rounded-lg bg-[#E86328] hover:bg-[#D2541C] text-white text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors"
+                        title="Preview Portal as Candidate"
+                      >
+                        <Eye size={14} />
+                        <span>Preview</span>
+                      </a>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          Token: {client.portalToken || "None"}
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleRegenerateToken}
+                        disabled={updatingPortal}
+                        className="text-xs text-rose-600 hover:text-rose-800 hover:underline font-medium"
+                      >
+                        Revoke & Generate New Key
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Privacy & Guardrails Notice */}
+                  <div className="bg-amber-50/60 rounded-xl p-4 border border-amber-200/80 text-xs text-amber-900 space-y-1.5">
+                    <div className="font-bold flex items-center gap-1.5">
+                      <ShieldCheck size={15} className="text-amber-700" />
+                      <span>Security & Isolation Guarantees</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-[11px] text-amber-800">
+                      <li>The candidate cannot see internal staff notes, private recruiter contacts, or job board credentials.</li>
+                      <li>Only records marked <code className="bg-white/80 px-1 py-0.5 rounded font-mono">visibleToClient: true</code> are queryable.</li>
+                      <li>All portal APIs strictly verify the logged-in candidate session ID. Cross-candidate data access is impossible.</li>
+                    </ul>
+                  </div>
+
+                  {/* Access Audit Logs */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                      Recent Candidate Portal Activity
+                    </h4>
+                    {client.portalAccessLogs && client.portalAccessLogs.length > 0 ? (
+                      <div className="bg-white rounded-xl border border-[#EAE5DC] overflow-hidden divide-y divide-gray-100">
+                        {client.portalAccessLogs.map((log: any) => (
+                          <div key={log.id} className="p-3 text-xs flex items-center justify-between">
+                            <span className="font-semibold text-slate-800 font-mono">
+                              {log.action}
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                              {formatDateTime(log.createdAt)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-white p-6 rounded-xl border border-[#EAE5DC] text-center text-slate-400 text-xs">
+                        No sign-ins recorded yet. Share the secret link above to invite the candidate.
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </>

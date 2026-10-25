@@ -25,37 +25,44 @@ model Staff {
 }
 
 model Client {
-  id                 String   @id @default(cuid())
+  id                 String    @id @default(cuid())
   name               String
-  email              String   @unique
+  email              String    @unique
   phone              String?
   targetRole         String
   preferredLocation  String?
   experienceLevel    String?
   skills             String?
   resumeUrl          String?
-  currentStage       String   @default("CONFIRMED")
-  paymentStatus      String   @default("PENDING")
+  currentStage       String    @default("CONFIRMED")
+  paymentStatus      String    @default("PENDING")
   assignedStaffId    String?
-  totalFee           Float    @default(0)
-  amountPaid         Float    @default(0)
-  balance            Float    @default(0)
-  planDurationMonths Int      @default(1)
-  planStartDate      DateTime @default(now())
+  totalFee           Float     @default(0)
+  amountPaid         Float     @default(0)
+  balance            Float     @default(0)
+  planDurationMonths Int       @default(1)
+  planStartDate      DateTime  @default(now())
   planEndDate        DateTime
-  dailyTarget        Int      @default(60)
+  dailyTarget        Int       @default(60)
   notes              String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  portalEnabled      Boolean   @default(false)
+  portalToken        String?   @unique
+  passwordHash       String?
+  isFirstLogin       Boolean   @default(true)
+  otpCode            String?
+  otpExpiresAt       DateTime?
+  registrationStatus String    @default("APPROVED")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  staff                  Staff?                   @relation(fields: [assignedStaffId], references: [id], onDelete: SetNull)
-  applications           Application[]
-  payments               Payment[]
-  interviews             Interview[]
+  staff                   Staff?                   @relation(fields: [assignedStaffId], references: [id], onDelete: SetNull)
+  applications            Application[]
+  payments                Payment[]
+  interviews              Interview[]
   recruiterCommunications RecruiterCommunication[]
-  stageHistory           ClientStageHistory[]
-  clientNotes            ClientNote[]
-  tasks                  ClientTask[]
+  stageHistory            ClientStageHistory[]
+  clientNotes             ClientNote[]
+  tasks                   ClientTask[]
 
   @@map("clients")
 }
@@ -72,6 +79,9 @@ model Application {
   recruiterContact String?
   notes            String?
   followUpDate     DateTime?
+  visibleToClient  Boolean   @default(true)
+  portal           String?   // LinkedIn, Naukri, Indeed
+  lastStatusAt     DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -142,6 +152,7 @@ model ClientStageHistory {
   newStage      String
   changedBy     String   @default("Team")
   notes         String?
+  clientNote    String?  // candidate-safe message; existing note stays internal
   createdAt     DateTime @default(now())
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -197,4 +208,13 @@ model AuditLog {
   createdAt   DateTime @default(now())
 
   @@map("audit_logs")
+}
+
+model PortalAccessLog {
+  id        String   @id @default(cuid())
+  clientId  String
+  action    String
+  createdAt DateTime @default(now())
+
+  @@map("portal_access_logs")
 }

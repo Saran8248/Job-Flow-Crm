@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { StageKey } from "@/lib/types";
+import { sendStageUpdateEmail } from "@/lib/email";
 
 export async function POST(
   req: NextRequest,
@@ -9,7 +10,7 @@ export async function POST(
   try {
     const { id } = params;
     const body = await req.json();
-    const { newStage, changedBy = "Staff Member", notes } = body;
+    const { newStage, changedBy = "Staff Member", notes, clientNote } = body;
 
     if (!newStage) {
       return NextResponse.json(
@@ -45,6 +46,7 @@ export async function POST(
           newStage,
           changedBy,
           notes: notes || `Stage transitioned from ${previousStage} to ${newStage}`,
+          clientNote: clientNote || `Milestone updated to ${newStage.replace(/_/g, " ")}.`,
         },
       }),
       prisma.notification.create({
@@ -64,6 +66,18 @@ export async function POST(
         },
       }),
     ]);
+
+    // Dispatch 5-line real-time email confirmation to candidate
+    if (updatedClient.email) {
+      await sendStageUpdateEmail({
+        to: updatedClient.email,
+        candidateName: updatedClient.name,
+        previousStage,
+        newStage,
+        specialistName: updatedClient.staff?.name || changedBy,
+        clientNote: clientNote || notes,
+      }).catch((err) => console.error("Stage email error:", err));
+    }
 
     return NextResponse.json({
       success: true,

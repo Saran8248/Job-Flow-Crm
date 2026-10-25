@@ -1,13 +1,24 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, UserCheck, Menu, X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  LayoutDashboard,
+  Users,
+  UserCheck,
+  UserPlus,
+  Menu,
+  X,
+  LogOut,
+  ShieldCheck,
+} from "lucide-react";
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = React.useState(false);
+  const router = useRouter();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const navItems = [
     {
@@ -23,12 +34,31 @@ export function Sidebar() {
       active: pathname.startsWith("/clients"),
     },
     {
+      name: "Cx Registration",
+      href: "/registrations",
+      icon: UserPlus,
+      active: pathname.startsWith("/registrations"),
+    },
+    {
       name: "Staff",
       href: "/staff",
       icon: UserCheck,
       active: pathname.startsWith("/staff"),
     },
   ];
+
+  const handleAdminLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/admin-logout", { method: "POST" });
+      router.push("/login");
+      router.refresh();
+    } catch {
+      router.push("/login");
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <>
@@ -68,7 +98,7 @@ export function Sidebar() {
                 JobAssist
               </span>
               <span className="text-xs text-slate-400 font-normal">
-                Client CRM
+                Admin CRM
               </span>
             </div>
           </div>
@@ -96,13 +126,24 @@ export function Sidebar() {
           </nav>
         </div>
 
-        {/* Sidebar Footer */}
-        <div className="p-4 border-t border-slate-800/80 text-xs text-slate-400 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
-            <span>System Active</span>
+        {/* Sidebar Footer with Logout */}
+        <div className="p-4 border-t border-slate-800/80 space-y-3">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+              <span>Admin Mode</span>
+            </div>
+            <span className="text-[11px] text-slate-500">v1.1</span>
           </div>
-          <span className="text-[11px] text-slate-400">v1.0</span>
+
+          <button
+            onClick={handleAdminLogout}
+            disabled={loggingOut}
+            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-slate-800 hover:bg-rose-950/60 hover:text-rose-300 text-xs text-slate-300 font-medium transition-colors border border-slate-700/60"
+          >
+            <LogOut size={14} />
+            <span>{loggingOut ? "Signing out..." : "Sign out Admin"}</span>
+          </button>
         </div>
       </aside>
     </>
