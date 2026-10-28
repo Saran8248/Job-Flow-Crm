@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --background: #f9f6f0;
-  --foreground: #182232;
+  --background: #0B0F17;
+  --foreground: #F8FAFC;
 }
 
 body {
@@ -14,18 +14,52 @@ body {
   min-height: 100vh;
 }
 
-/* Custom smooth scrollbar */
+/* Custom smooth dark scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1ede4;
+  background: #0B0F17;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d4ccbe;
+  background: #1E293B;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #b8ac9a;
+  background: #334155;
+}
+
+/* Right-to-Left Continuous Horizontal Scrolling Animation */
+@keyframes scrollRightToLeft {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-stream-rtl {
+  animation: scrollRightToLeft 50s linear infinite;
+}
+
+.animate-stream-rtl-fast {
+  animation: scrollRightToLeft 42s linear infinite;
+}
+
+.animate-stream-rtl-slow {
+  animation: scrollRightToLeft 65s linear infinite;
+}
+
+.animate-stream-rtl:hover,
+.animate-stream-rtl-fast:hover,
+.animate-stream-rtl-slow:hover {
+  animation-play-state: paused;
+}
+
+/* Horizontal fade mask for seamless edge blending */
+.mask-gradient-x {
+  mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
 }

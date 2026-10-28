@@ -58,6 +58,7 @@ export async function GET(request: Request) {
           applicationDate: true,
           status: true,
           portal: true,
+          proofImageUrl: true,
           lastStatusAt: true,
           // Intentionally omitting internal staff notes and recruiter contact info
         },

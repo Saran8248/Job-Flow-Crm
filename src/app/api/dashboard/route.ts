@@ -7,9 +7,16 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const now = new Date();
-    // Today boundaries
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    // Daily calculation aligned to Asia/Kolkata (IST) midnight reset
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(now.getTime() + istOffsetMs);
+    const todayStartIST = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate(), 0, 0, 0, 0));
+    const startOfToday = new Date(todayStartIST.getTime() - istOffsetMs);
+    const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+    // Yesterday bounds (IST)
+    const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
+    const endOfYesterday = new Date(startOfToday.getTime() - 1);
 
     // 7 days from now for renewals due
     const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -326,6 +333,159 @@ export async function GET() {
       },
     });
 
+    // 7. Staff Performance & Target Tracking (Internal Team)
+    const activeStaffMembers = await prisma.staff.findMany({
+      where: { accountStatus: "ACTIVE" },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        email: true,
+        clients: {
+          select: {
+            id: true,
+            name: true,
+            dailyTarget: true,
+            currentStage: true,
+            applications: {
+              where: {
+                applicationDate: { gte: startOfToday, lte: endOfToday },
+              },
+              select: { id: true, applicationDate: true, proofImageUrl: true },
+            },
+          },
+        },
+      },
+      orderBy: { name: "asc" },
+    });
+
+    let globalTargetsCompletedToday = 0;
+
+    const staffPerformance = activeStaffMembers.map((s) => {
+      let appliedToday = 0;
+      let totalDailyTarget = 0;
+      let targetsCompleted = 0;
+
+      s.clients.forEach((c) => {
+        const count = c.applications.length;
+        appliedToday += count;
+        const target = c.dailyTarget || 20;
+        totalDailyTarget += target;
+        if (count >= target) {
+          targetsCompleted += 1;
+        }
+      });
+
+      globalTargetsCompletedToday += targetsCompleted;
+
+      const completionRate =
+        totalDailyTarget > 0
+          ? Math.min(100, Math.round((appliedToday / totalDailyTarget) * 100))
+          : 0;
+
+      return {
+        id: s.id,
+        name: s.name,
+        role: s.role,
+        email: s.email,
+        assignedCxCount: s.clients.length,
+        appliedToday,
+        totalDailyTarget,
+        targetsCompleted,
+        completionRate,
+      };
+    });
+
+    // 8. CX Workspace List (Assigned Staff, Today's Progress, Last App Time)
+    const cxWorkspaceList = await Promise.all(
+      allClients.map(async (client) => {
+        const todayApps = await prisma.application.findMany({
+          where: {
+            clientId: client.id,
+            applicationDate: { gte: startOfToday, lte: endOfToday },
+          },
+          orderBy: { applicationDate: "desc" },
+          select: { id: true, applicationDate: true, proofImageUrl: true },
+        });
+
+        const yesterdayAppsCount = await prisma.application.count({
+          where: {
+            clientId: client.id,
+            applicationDate: { gte: startOfYesterday, lte: endOfYesterday },
+          },
+        });
+
+        const target = client.dailyTarget || 20;
+        const count = todayApps.length;
+        const status =
+          count >= target
+            ? "TARGET_DONE"
+            : count > 0
+            ? "IN_PROGRESS"
+            : "NOT_STARTED";
+        const lastAppTime = todayApps[0]?.applicationDate || null;
+        const missedYesterday = yesterdayAppsCount < target;
+
+        return {
+          id: client.id,
+          name: client.name,
+          email: client.email,
+          targetRole: client.targetRole,
+          staffName: client.staff?.name || "Unassigned",
+          staffId: client.staff?.id || null,
+          dailyTarget: target,
+          appliedToday: count,
+          progressPercent: Math.min(100, Math.round((count / target) * 100)),
+          status,
+          lastAppTime,
+          latestProofUrl: todayApps[0]?.proofImageUrl || null,
+          missedYesterday,
+        };
+      })
+    );
+
+    const targetsMissedYesterdayCount = cxWorkspaceList.filter(
+      (c) => c.missedYesterday && c.staffName !== "Unassigned"
+    ).length;
+
+    // 9. Recent Applications Feed with Proof URLs
+    const recentApplicationsFeed = await prisma.application.findMany({
+      take: 10,
+      orderBy: { applicationDate: "desc" },
+      select: {
+        id: true,
+        companyName: true,
+        jobTitle: true,
+        portal: true,
+        status: true,
+        proofImageUrl: true,
+        applicationDate: true,
+        jobPostingUrl: true,
+        notes: true,
+        client: {
+          select: {
+            id: true,
+            name: true,
+            staff: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // 10. Cut-off time alerts (4 PM / 16:00 IST)
+    const istHour = istNow.getUTCHours();
+    const isPastCutoff = istHour >= 16;
+    const cutOffAlerts = isPastCutoff
+      ? cxWorkspaceList.filter(
+          (c) => c.appliedToday === 0 && c.staffName !== "Unassigned"
+        )
+      : [];
+
     // Time of day greeting
     const hour = now.getHours();
     let greeting = "Good morning, team";
@@ -345,7 +505,10 @@ export async function GET() {
         interviewCount: interviewsSecuredCount,
         closureCount: closureClientsList.length,
         activeClients: activeClientsCount,
+        activeStaffCount: activeStaffMembers.length,
         applicationsToday: applicationsTodayCount,
+        targetsCompletedToday: globalTargetsCompletedToday,
+        targetsMissedYesterday: targetsMissedYesterdayCount,
         interviewsSecured: interviewsSecuredCount,
         renewalsDue: renewalsDueCount,
       },
@@ -354,6 +517,11 @@ export async function GET() {
       stageOrder: STAGE_LIST,
       todayProgress,
       recruiterInbox,
+      staffPerformance,
+      cxWorkspaceList,
+      recentApplicationsFeed,
+      cutOffAlerts,
+      isPastCutoff,
     });
   } catch (error: any) {
     console.error("Dashboard API error:", error);

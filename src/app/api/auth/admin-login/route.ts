@@ -1,23 +1,41 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import {
   signAdminToken,
   ADMIN_SECRET_CODE,
   ADMIN_COOKIE_NAME,
 } from "@/lib/auth-helpers";
+import {
+  rateLimit,
+  getClientIp,
+  createRateLimitResponse,
+} from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
+const adminLoginSchema = z.object({
+  secretCode: z.string().min(1, "Secret code is required"),
+});
+
 export async function POST(request: Request) {
   try {
-    const body = await request.json().catch(() => ({}));
-    const { secretCode } = body;
+    const ip = getClientIp(request);
+    const limitCheck = rateLimit(`admin-login:${ip}`, 5, 5 * 60 * 1000);
+    if (!limitCheck.success) {
+      return createRateLimitResponse(limitCheck.reset);
+    }
 
-    if (!secretCode || typeof secretCode !== "string") {
+    const body = await request.json().catch(() => ({}));
+    const parseResult = adminLoginSchema.safeParse(body);
+
+    if (!parseResult.success) {
       return NextResponse.json(
         { error: "Secret code is required to access the Admin CRM." },
         { status: 400 }
       );
     }
+
+    const { secretCode } = parseResult.data;
 
     // Verify secret code (case-insensitive trim)
     if (secretCode.trim().toUpperCase() !== ADMIN_SECRET_CODE.toUpperCase()) {
@@ -27,7 +45,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const token = signAdminToken();
+    const token = signAdminToken({
+      role: "ADMIN",
+      email: "admin@jobassist.com",
+      name: "Administrator",
+    });
+
     const response = NextResponse.json({
       success: true,
       message: "Admin authentication successful",

@@ -11,13 +11,15 @@ datasource db {
 }
 
 model Staff {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   name          String
-  email         String   @unique
-  role          String   @default("Career Specialist")
-  accountStatus String   @default("ACTIVE")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  email         String    @unique
+  role          String    @default("Career Specialist")
+  accountStatus String    @default("ACTIVE")
+  passwordHash  String?
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   clients Client[]
 
@@ -51,6 +53,7 @@ model Client {
   isFirstLogin       Boolean   @default(true)
   otpCode            String?
   otpExpiresAt       DateTime?
+  otpAttempts        Int       @default(0)
   registrationStatus String    @default("APPROVED")
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -64,6 +67,8 @@ model Client {
   clientNotes             ClientNote[]
   tasks                   ClientTask[]
 
+  @@index([assignedStaffId])
+  @@index([email])
   @@map("clients")
 }
 
@@ -82,12 +87,15 @@ model Application {
   visibleToClient  Boolean   @default(true)
   portal           String?   // LinkedIn, Naukri, Indeed
   lastStatusAt     DateTime?
+  proofImageUrl    String?   // Screenshot proof of submission
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   client     Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
   interviews Interview[]
 
+  @@index([clientId, applicationDate])
+  @@index([status])
   @@map("applications")
 }
 
@@ -105,6 +113,7 @@ model Payment {
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
+  @@index([clientId])
   @@map("payments")
 }
 
@@ -124,6 +133,7 @@ model Interview {
   client      Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
   application Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
 
+  @@index([clientId])
   @@map("interviews")
 }
 
@@ -142,6 +152,7 @@ model RecruiterCommunication {
 
   client Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
+  @@index([clientId])
   @@map("recruiter_communications")
 }
 
@@ -157,6 +168,7 @@ model ClientStageHistory {
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
+  @@index([clientId])
   @@map("client_stage_history")
 }
 
@@ -170,6 +182,7 @@ model ClientNote {
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
+  @@index([clientId])
   @@map("client_notes")
 }
 
@@ -184,6 +197,7 @@ model ClientTask {
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
+  @@index([clientId])
   @@map("client_tasks")
 }
 
@@ -216,5 +230,6 @@ model PortalAccessLog {
   action    String
   createdAt DateTime @default(now())
 
+  @@index([clientId])
   @@map("portal_access_logs")
 }

@@ -1,24 +1,40 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { generateOtp } from "@/lib/auth-helpers";
 import { logPortalAccess } from "@/lib/portal-auth";
 import { sendOtpEmail } from "@/lib/email";
+import {
+  rateLimit,
+  getClientIp,
+  createRateLimitResponse,
+} from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
+const checkEmailSchema = z.object({
+  email: z.string().email("Please enter a valid email address."),
+});
+
 export async function POST(request: Request) {
   try {
-    const body = await request.json().catch(() => ({}));
-    const { email } = body;
+    const ip = getClientIp(request);
+    const limitCheck = rateLimit(`check-email:${ip}`, 6, 5 * 60 * 1000);
+    if (!limitCheck.success) {
+      return createRateLimitResponse(limitCheck.reset);
+    }
 
-    if (!email || typeof email !== "string" || !email.trim()) {
+    const body = await request.json().catch(() => ({}));
+    const parseResult = checkEmailSchema.safeParse(body);
+
+    if (!parseResult.success) {
       return NextResponse.json(
         { error: "Please enter your registered email address." },
         { status: 400 }
       );
     }
 
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail = parseResult.data.email.trim().toLowerCase();
 
     const client = await prisma.client.findFirst({
       where: { email: cleanEmail },
@@ -54,7 +70,7 @@ export async function POST(request: Request) {
     const isFirstTime = client.isFirstLogin || !client.passwordHash;
 
     if (isFirstTime) {
-      // Generate 6-digit OTP for first-time verification
+      // Generate 6-digit cryptographic OTP (crypto.randomInt)
       const otp = generateOtp();
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
@@ -63,6 +79,7 @@ export async function POST(request: Request) {
         data: {
           otpCode: otp,
           otpExpiresAt: expiresAt,
+          otpAttempts: 0, // Reset attempt counter
         },
       });
 
@@ -76,6 +93,11 @@ export async function POST(request: Request) {
         reason: "FIRST_LOGIN",
       });
 
+      // ONLY expose debugOtp in non-production local development if explicitly enabled
+      const exposeDebug =
+        process.env.NODE_ENV !== "production" &&
+        process.env.EXPOSE_DEBUG_OTP === "true";
+
       return NextResponse.json({
         success: true,
         isFirstLogin: true,
@@ -84,7 +106,7 @@ export async function POST(request: Request) {
         message: emailResult.success
           ? `A 6-digit verification OTP has been sent directly to your email (${cleanEmail}).`
           : `A 6-digit verification OTP has been generated for ${cleanEmail}.`,
-        debugOtp: otp,
+        ...(exposeDebug ? { debugOtp: otp } : {}),
       });
     }
 

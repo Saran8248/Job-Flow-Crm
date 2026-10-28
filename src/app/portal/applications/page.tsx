@@ -10,6 +10,9 @@ import {
   Building,
   MapPin,
   RefreshCw,
+  Image as ImageIcon,
+  Maximize2,
+  X,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
@@ -22,6 +25,7 @@ interface ApplicationItem {
   applicationDate: string;
   status: string;
   portal?: string;
+  proofImageUrl?: string | null;
   lastStatusAt?: string;
 }
 
@@ -32,6 +36,8 @@ export default function CandidateApplicationsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
+  const [lightboxTitle, setLightboxTitle] = useState<string | null>(null);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -194,6 +200,7 @@ export default function CandidateApplicationsPage() {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
               <tr>
+                <th className="px-5 py-3.5">Proof</th>
                 <th className="px-5 py-3.5">Company</th>
                 <th className="px-5 py-3.5">Job Title</th>
                 <th className="px-5 py-3.5">Portal</th>
@@ -206,6 +213,32 @@ export default function CandidateApplicationsPage() {
             <tbody className="divide-y divide-slate-100">
               {applications.map((app) => (
                 <tr key={app.id} className="hover:bg-slate-50/60 transition-colors">
+                  <td className="px-5 py-4">
+                    {app.proofImageUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLightboxImageUrl(app.proofImageUrl!);
+                          setLightboxTitle(`${app.jobTitle} @ ${app.companyName}`);
+                        }}
+                        className="relative w-10 h-10 rounded-lg overflow-hidden border border-slate-200 hover:border-[#E86328] group transition-all shrink-0"
+                        title="Click to view full screenshot proof"
+                      >
+                        <img
+                          src={app.proofImageUrl}
+                          alt="Application proof"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <Maximize2 size={11} className="text-white" />
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400">
+                        <ImageIcon size={14} />
+                      </div>
+                    )}
+                  </td>
                   <td className="px-5 py-4 font-bold text-slate-900">
                     <div className="flex items-center gap-2">
                       <Building size={14} className="text-slate-400 shrink-0" />
@@ -345,6 +378,38 @@ export default function CandidateApplicationsPage() {
           </div>
         </div>
       </div>
+
+      {/* SCREENSHOT PROOF LIGHTBOX MODAL */}
+      {lightboxImageUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setLightboxImageUrl(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <span className="font-bold text-sm">
+                {lightboxTitle || "Screenshot Proof of Application"}
+              </span>
+              <button
+                onClick={() => setLightboxImageUrl(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-4 overflow-auto flex items-center justify-center bg-slate-950">
+              <img
+                src={lightboxImageUrl}
+                alt="Verified Proof"
+                className="max-h-[75vh] w-auto rounded-lg object-contain shadow-md"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -6,14 +6,18 @@ import { Sidebar } from "@/components/Sidebar";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+
+  // Hide CRM Sidebar on all login/auth and candidate portal pages
+  const isAuthPage =
+    pathname === "/login" ||
+    pathname?.startsWith("/login") ||
+    pathname === "/portal/login" ||
+    pathname?.startsWith("/portal/login");
+
   const isPortal = pathname?.startsWith("/portal");
 
-  if (isPortal) {
-    return (
-      <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] antialiased">
-        {children}
-      </div>
-    );
+  if (isAuthPage || isPortal) {
+    return <>{children}</>;
   }
 
   return (

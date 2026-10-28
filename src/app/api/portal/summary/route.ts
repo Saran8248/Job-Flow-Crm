@@ -18,8 +18,12 @@ export async function GET() {
     await logPortalAccess(clientId, "VIEW_SUMMARY");
 
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    // Daily calculation aligned to Asia/Kolkata (IST) midnight reset
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(now.getTime() + istOffsetMs);
+    const todayStartIST = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate(), 0, 0, 0, 0));
+    const startOfToday = new Date(todayStartIST.getTime() - istOffsetMs);
+    const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
 
     // Fetch client with safe relations using explicit whitelist
     const client = await prisma.client.findUnique({
@@ -181,17 +185,21 @@ export async function GET() {
         jobLocation: true,
         portal: true,
         status: true,
+        proofImageUrl: true,
         applicationDate: true,
         jobPostingUrl: true,
       },
       orderBy: { applicationDate: "desc" },
-      take: 5,
+      take: 6,
     });
 
     // 6. Plan validity calculations
     const planEndDate = new Date(client.planEndDate);
     const msRemaining = planEndDate.getTime() - now.getTime();
     const daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
+
+    const dailyTargetVal = client.dailyTarget || 20;
+    const targetCompletedToday = appliedToday >= dailyTargetVal;
 
     return NextResponse.json({
       candidate: {
@@ -204,7 +212,7 @@ export async function GET() {
         experienceLevel: client.experienceLevel,
         skills: client.skills,
         currentStage: client.currentStage,
-        dailyTarget: client.dailyTarget,
+        dailyTarget: dailyTargetVal,
       },
       specialist: client.staff
         ? {
@@ -216,7 +224,8 @@ export async function GET() {
       counters: {
         totalApplied,
         appliedToday,
-        dailyTarget: client.dailyTarget,
+        dailyTarget: dailyTargetVal,
+        targetCompletedToday,
         assessments: assessmentCount,
         interviews: interviewsCount,
         offers: offersCount,

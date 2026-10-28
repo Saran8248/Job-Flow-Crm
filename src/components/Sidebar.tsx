@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -8,24 +8,75 @@ import {
   Users,
   UserCheck,
   UserPlus,
+  Briefcase,
+  BarChart3,
   Menu,
   X,
   LogOut,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
+
+interface UserSession {
+  authenticated: boolean;
+  role?: "ADMIN" | "STAFF";
+  name?: string;
+  email?: string;
+  staffId?: string;
+}
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [session, setSession] = useState<UserSession | null>(null);
 
-  const navItems = [
+  // Fetch current session role
+  useEffect(() => {
+    let isMounted = true;
+    async function checkAuth() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data.authenticated) {
+            setSession(data);
+          }
+        }
+      } catch (err) {
+        console.error("Sidebar auth check error:", err);
+      }
+    }
+    checkAuth();
+    return () => {
+      isMounted = false;
+    };
+  }, [pathname]);
+
+  // Determine effective role:
+  // If explicitly STAFF from session, or if path is /staff/* and not yet identified as admin, default role accordingly
+  const isStaffMode = session?.role === "STAFF";
+
+  // Navigation Items
+  const adminNavItems = [
     {
       name: "Dashboard",
       href: "/",
       icon: LayoutDashboard,
       active: pathname === "/",
+    },
+    {
+      name: "Staff Dashboard",
+      href: "/staff/dashboard",
+      icon: BarChart3,
+      active: pathname === "/staff/dashboard",
+    },
+    {
+      name: "Staff Workspace",
+      href: "/staff/workspace",
+      icon: Briefcase,
+      active: pathname.startsWith("/staff/workspace"),
     },
     {
       name: "Clients",
@@ -40,18 +91,42 @@ export function Sidebar() {
       active: pathname.startsWith("/registrations"),
     },
     {
-      name: "Staff",
+      name: "Staff Team",
       href: "/staff",
       icon: UserCheck,
-      active: pathname.startsWith("/staff"),
+      active:
+        pathname === "/staff" ||
+        (pathname.startsWith("/staff") &&
+          !pathname.startsWith("/staff/workspace") &&
+          !pathname.startsWith("/staff/dashboard")),
     },
   ];
 
-  const handleAdminLogout = async () => {
+  // In Staff Mode: cx, cx registration, and staff team are REMOVED!
+  // Only Staff Dashboard and Staff Workspace are available
+  const staffNavItems = [
+    {
+      name: "Staff Dashboard",
+      href: "/staff/dashboard",
+      icon: LayoutDashboard,
+      active: pathname === "/staff/dashboard",
+    },
+    {
+      name: "Staff Workspace",
+      href: "/staff/workspace",
+      icon: Briefcase,
+      active: pathname.startsWith("/staff/workspace"),
+    },
+  ];
+
+  const navItems = isStaffMode ? staffNavItems : adminNavItems;
+
+  const handleLogout = async () => {
     setLoggingOut(true);
     try {
       await fetch("/api/auth/admin-logout", { method: "POST" });
-      router.push("/login");
+      const targetLogin = isStaffMode ? "/login?role=staff" : "/login?role=admin";
+      router.push(targetLogin);
       router.refresh();
     } catch {
       router.push("/login");
@@ -97,9 +172,16 @@ export function Sidebar() {
               <span className="font-semibold text-[17px] tracking-tight text-white leading-tight">
                 JobAssist
               </span>
-              <span className="text-xs text-slate-400 font-normal">
-                Admin CRM
-              </span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-xs text-slate-400 font-normal">
+                  {isStaffMode ? "Staff Portal" : "Admin CRM"}
+                </span>
+                {isStaffMode && (
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-[#E86328]/20 text-[#E86328] border border-[#E86328]/30">
+                    STAFF
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -114,35 +196,49 @@ export function Sidebar() {
                   onClick={() => setMobileOpen(false)}
                   className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     item.active
-                      ? "bg-[#E86328] text-white shadow-sm"
+                      ? "bg-[#E86328] text-white shadow-sm font-semibold"
                       : "text-slate-300 hover:text-white hover:bg-slate-800/60"
                   }`}
                 >
-                  <Icon size={18} className="opacity-90" />
-                  <span>{item.name}</span>
+                  <Icon size={18} className="opacity-90 shrink-0" />
+                  <span className="truncate">{item.name}</span>
                 </Link>
               );
             })}
           </nav>
         </div>
 
-        {/* Sidebar Footer with Logout */}
+        {/* Sidebar Footer with Logout & Role Indicator */}
         <div className="p-4 border-t border-slate-800/80 space-y-3">
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
-              <span>Admin Mode</span>
+            <div className="flex items-center gap-2 truncate">
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  isStaffMode ? "bg-[#E86328]" : "bg-emerald-400"
+                }`}
+              />
+              <span className="truncate">
+                {isStaffMode
+                  ? `Staff: ${session?.name || "Member"}`
+                  : "Admin Mode"}
+              </span>
             </div>
-            <span className="text-[11px] text-slate-500">v1.1</span>
+            <span className="text-[11px] text-slate-500 shrink-0">v1.1</span>
           </div>
 
           <button
-            onClick={handleAdminLogout}
+            onClick={handleLogout}
             disabled={loggingOut}
             className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-slate-800 hover:bg-rose-950/60 hover:text-rose-300 text-xs text-slate-300 font-medium transition-colors border border-slate-700/60"
           >
             <LogOut size={14} />
-            <span>{loggingOut ? "Signing out..." : "Sign out Admin"}</span>
+            <span>
+              {loggingOut
+                ? "Signing out..."
+                : isStaffMode
+                ? "Sign out Staff"
+                : "Sign out Admin"}
+            </span>
           </button>
         </div>
       </aside>

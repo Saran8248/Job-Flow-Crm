@@ -14,6 +14,11 @@ import {
   Sparkles,
   Layers,
   Video,
+  Image as ImageIcon,
+  ExternalLink,
+  Maximize2,
+  Building,
+  X,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
@@ -38,6 +43,7 @@ interface SummaryResponse {
     totalApplied: number;
     appliedToday: number;
     dailyTarget: number;
+    targetCompletedToday?: boolean;
     assessments: number;
     interviews: number;
     offers: number;
@@ -71,6 +77,7 @@ interface SummaryResponse {
     jobTitle: string;
     portal?: string;
     status: string;
+    proofImageUrl?: string | null;
     applicationDate: string;
     jobPostingUrl?: string;
   }>;
@@ -90,6 +97,8 @@ export default function CandidateDashboard() {
   const [data, setData] = useState<SummaryResponse | null>(null);
   const [timeline, setTimeline] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
+  const [lightboxTitle, setLightboxTitle] = useState<string | null>(null);
 
   useEffect(() => {
     loadPortalData();
@@ -181,6 +190,36 @@ export default function CandidateDashboard() {
           </div>
         )}
       </div>
+
+      {/* Target Completed Celebration Banner */}
+      {(data.counters.appliedToday >= data.counters.dailyTarget || data.counters.targetCompletedToday) && (
+        <div className="bg-gradient-to-r from-[#0E1420] via-[#131B29] to-[#1A120B] border border-emerald-500/50 rounded-2xl p-5 text-white shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0">
+              <CheckCircle2 size={24} className="animate-pulse text-emerald-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm sm:text-base text-white">
+                  Today&apos;s Application Target Completed!
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  Target Met
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Your Career Specialist has successfully filed {data.counters.appliedToday} out of {data.counters.dailyTarget} targeted applications today. All submission proofs are logged below.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center sm:flex-col sm:items-end justify-between sm:justify-center border-t sm:border-t-0 pt-2 sm:pt-0 border-white/10 shrink-0">
+            <span className="text-xl sm:text-2xl font-black text-emerald-400 font-mono">
+              {data.counters.appliedToday} / {data.counters.dailyTarget}
+            </span>
+            <span className="text-[10px] text-slate-400 font-medium">100% Target Met Today</span>
+          </div>
+        </div>
+      )}
 
       {/* 2. Requirement F1: 9-Stage Progress Tracker Stepper */}
       <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-xs">
@@ -493,6 +532,120 @@ export default function CandidateDashboard() {
         </div>
       </div>
 
+      {/* 4.5 Verified Applications with Submission Proofs */}
+      <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-[#E86328]" />
+              <span>Verified Applications Dispatched on Your Behalf</span>
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Every submission logged by your specialist includes screenshot proof of application.
+            </p>
+          </div>
+          <Link
+            href="/portal/applications"
+            className="text-xs font-bold text-[#E86328] hover:underline inline-flex items-center gap-1"
+          >
+            <span>View All ({data.counters.totalApplied})</span>
+            <ArrowRight size={13} />
+          </Link>
+        </div>
+
+        {data.recentApplications && data.recentApplications.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-100">
+                <tr>
+                  <th className="py-2.5 px-3">Proof Thumbnail</th>
+                  <th className="py-2.5 px-3">Job Role</th>
+                  <th className="py-2.5 px-3">Company</th>
+                  <th className="py-2.5 px-3">Portal</th>
+                  <th className="py-2.5 px-3">Applied Date & Time</th>
+                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3 text-right">Job Posting</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {data.recentApplications.map((app) => (
+                  <tr key={app.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="py-3 px-3">
+                      {app.proofImageUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLightboxImageUrl(app.proofImageUrl!);
+                            setLightboxTitle(`${app.jobTitle} @ ${app.companyName}`);
+                          }}
+                          className="relative w-11 h-11 rounded-lg overflow-hidden border border-slate-200 hover:border-[#E86328] group transition-all shrink-0"
+                          title="Click to view full screenshot proof"
+                        >
+                          <img
+                            src={app.proofImageUrl}
+                            alt="Application proof"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <Maximize2 size={12} className="text-white" />
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="w-11 h-11 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400">
+                          <ImageIcon size={15} />
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-3 px-3 font-bold text-slate-900 max-w-[180px] truncate">
+                      {app.jobTitle}
+                    </td>
+                    <td className="py-3 px-3 font-medium text-slate-700 max-w-[150px] truncate">
+                      <div className="flex items-center gap-1.5">
+                        <Building size={13} className="text-slate-400 shrink-0" />
+                        <span>{app.companyName}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className="inline-block text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                        {app.portal || "Direct"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-slate-500 text-[11px] font-mono">
+                      {formatDate(app.applicationDate)}
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <CheckCircle2 size={10} className="text-emerald-600" />
+                        <span>{app.status || "Applied"}</span>
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      {app.jobPostingUrl ? (
+                        <a
+                          href={app.jobPostingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[#E86328] font-bold text-[11px] hover:underline"
+                        >
+                          <span>Link</span>
+                          <ExternalLink size={11} />
+                        </a>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="py-8 text-center text-xs text-slate-400">
+            No applications logged yet today. Submissions will appear here in real-time as your specialist applies.
+          </div>
+        )}
+      </div>
+
       {/* 5. Requirement F7: Activity Timeline & Requirement F8: Plan Info */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* F7: Candidate-Safe Activity Timeline (8 cols) */}
@@ -589,6 +742,38 @@ export default function CandidateDashboard() {
           </div>
         </div>
       </div>
+
+      {/* SCREENSHOT PROOF LIGHTBOX MODAL */}
+      {lightboxImageUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setLightboxImageUrl(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <span className="font-bold text-sm">
+                {lightboxTitle || "Screenshot Proof of Submission"}
+              </span>
+              <button
+                onClick={() => setLightboxImageUrl(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-4 overflow-auto flex items-center justify-center bg-slate-950">
+              <img
+                src={lightboxImageUrl}
+                alt="Verified Proof"
+                className="max-h-[75vh] w-auto rounded-lg object-contain shadow-md"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

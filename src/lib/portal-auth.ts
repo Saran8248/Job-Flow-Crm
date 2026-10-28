@@ -3,7 +3,14 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 
 const SESSION_COOKIE_NAME = "cx_session";
-const SESSION_SECRET = process.env.PORTAL_SESSION_SECRET || "jobassist-candidate-portal-secure-key-2026";
+const SESSION_SECRET =
+  process.env.PORTAL_SESSION_SECRET ||
+  (process.env.NODE_ENV === "production"
+    ? (() => {
+        throw new Error("CRITICAL SECURITY ERROR: PORTAL_SESSION_SECRET is required in production!");
+      })()
+    : "jobassist-candidate-portal-secure-key-2026");
+
 const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 export interface CandidateSessionPayload {
@@ -37,7 +44,15 @@ export function verifySessionToken(token: string): CandidateSessionPayload | nul
       .update(base64Data)
       .digest("base64url");
 
-    if (signature !== expectedSig) return null;
+    if (signature.length !== expectedSig.length) return null;
+    if (
+      !crypto.timingSafeEqual(
+        Buffer.from(signature, "utf8"),
+        Buffer.from(expectedSig, "utf8")
+      )
+    ) {
+      return null;
+    }
 
     const json = Buffer.from(base64Data, "base64url").toString("utf8");
     const payload = JSON.parse(json) as CandidateSessionPayload;

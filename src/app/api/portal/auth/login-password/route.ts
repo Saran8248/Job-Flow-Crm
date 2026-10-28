@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth-helpers";
 import {
@@ -7,21 +8,37 @@ import {
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_SECONDS,
 } from "@/lib/portal-auth";
+import {
+  rateLimit,
+  getClientIp,
+  createRateLimitResponse,
+} from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
+const loginPasswordSchema = z.object({
+  email: z.string().email("Valid email is required"),
+  password: z.string().min(1, "Password is required"),
+});
+
 export async function POST(request: Request) {
   try {
-    const body = await request.json().catch(() => ({}));
-    const { email, password } = body;
+    const ip = getClientIp(request);
+    const limitCheck = rateLimit(`candidate-login:${ip}`, 6, 5 * 60 * 1000);
+    if (!limitCheck.success) {
+      return createRateLimitResponse(limitCheck.reset);
+    }
 
-    if (!email || !password) {
+    const body = await request.json().catch(() => ({}));
+    const parseResult = loginPasswordSchema.safeParse(body);
+    if (!parseResult.success) {
       return NextResponse.json(
         { error: "Email and password are required." },
         { status: 400 }
       );
     }
 
+    const { email, password } = parseResult.data;
     const cleanEmail = email.trim().toLowerCase();
 
     const client = await prisma.client.findFirst({
